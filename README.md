@@ -1,12 +1,14 @@
 # Kelo
 
+![WIP](https://img.shields.io/badge/status-WIP-yellow)
+
 A personal archive for bills, invoices, and important house/car documents.
 
-The intended flow: n8n watches a mailbox (any IMAP/OAuth provider) for PDFs from known senders, extracts structured data (amount, supplier, due date, consumption), stores a row in Notion with the PDF attached, and flags amount mismatches (subtotals vs total, or a spike vs history).
+The intended pipeline: watch a mailbox (any IMAP/OAuth provider) for PDFs from known senders, extract structured data (amount, supplier, due date, consumption), store a row in a document store with the PDF attached, and flag amount mismatches (subtotals vs total, or a spike vs history).
 
-**Work in progress.** That pipeline is not built yet. What exists today is the n8n host: compose, a persistent volume, and this README.
+Today that means n8n for automation and Notion for storage. Both can be replaced later.
 
-Runtime state lives in a Docker volume (SQLite). Workflow JSON in `workflows/` will be the Git copy of those automations, once they exist.
+Runtime state lives in a Docker volume (SQLite). Workflow JSON in `workflows/` is the Git copy of those automations.
 
 ## Prerequisites
 
