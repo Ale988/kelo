@@ -1,0 +1,141 @@
+{
+  "id": "Q3nb17Ue1620295q",
+  "name": "Mailbox ingest (IMAP)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Liste utente\nModifica **solo** il nodo **Allowlists**.\n\n- **senders**: email mittente, separate da virgola\n- **subjectKeywords**: parole nell'oggetto, separate da virgola\n\nEsempio mittenti: `ciao@octopusenergy.it, fatture@enel.it`\nEsempio oggetto: `bolletta, fattura`\n\nSe **subjectKeywords** è vuoto, passa qualsiasi oggetto (resta il filtro mittente).",
+        "height": 380,
+        "width": 360,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-240, -80],
+      "id": "sticky-allowlists-help",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "postProcessAction": "nothing",
+        "downloadAttachments": true,
+        "options": {
+          "forceReconnect": 60
+        }
+      },
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.2,
+      "position": [0, 0],
+      "id": "26f60ff9-7a90-450b-96a4-5d2e2a62d024",
+      "name": "Email Trigger (IMAP)",
+      "credentials": {
+        "imap": {
+          "id": "EbvXfjATigT525Ho",
+          "name": "IMAP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1-senders",
+              "name": "senders",
+              "value": "ciao@octopusenergy.it",
+              "type": "string"
+            },
+            {
+              "id": "a2-keywords",
+              "name": "subjectKeywords",
+              "value": "bolletta, fattura",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [224, 0],
+      "id": "allowlists-edit-fields",
+      "name": "Allowlists",
+      "notes": "User-editable comma-separated lists. Do not put secrets here."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-sender",
+              "leftValue": "={{ String($json.senders || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean).some(s => String($json.from || '').toLowerCase().includes(s)) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-subject",
+              "leftValue": "={{ (() => { const keys = String($json.subjectKeywords || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean); const subject = String($json.subject || '').toLowerCase(); return keys.length === 0 || keys.some(k => subject.includes(k)); })() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [448, 0],
+      "id": "7bd3518b-d3dd-4c6c-8ba3-9bbcf217a759",
+      "name": "If"
+    }
+  ],
+  "connections": {
+    "Email Trigger (IMAP)": {
+      "main": [
+        [
+          {
+            "node": "Allowlists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Allowlists": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
