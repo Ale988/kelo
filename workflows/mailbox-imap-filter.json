@@ -1,24 +1,30 @@
 {
+  "updatedAt": "2026-08-21T01:15:09.171Z",
+  "createdAt": "2026-08-19T23:22:19.801Z",
   "id": "Q3nb17Ue1620295q",
   "name": "Mailbox ingest (IMAP)",
+  "description": null,
   "active": false,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
-        "content": "## Liste utente\nModifica **solo** il nodo **Allowlists**.\n\n- **senders**: email mittente, separate da virgola\n- **subjectKeywords**: parole nell'oggetto, separate da virgola\n\nEsempio mittenti: `ciao@octopusenergy.it, fatture@enel.it`\nEsempio oggetto: `bolletta, fattura`\n\nSe **subjectKeywords** è vuoto, passa qualsiasi oggetto (resta il filtro mittente).",
-        "height": 380,
+        "content": "## Liste utente\nModifica **solo** il nodo **Allowlists**.\n\n- **senders**: email esatte o domini `@esempio.it`, separate da virgola\n- **subjectKeywords**: parole nell'oggetto (substring), separate da virgola\n\nSenders vuoto → nessuna mail passa.\nKeywords vuoto → qualsiasi oggetto (resta il filtro mittente).\n\nLogica in **Normalize** (JavaScript).",
+        "height": 360,
         "width": 360,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-240, -80],
+      "position": [
+        -496,
+        -112
+      ],
       "id": "sticky-allowlists-help",
       "name": "Sticky Note"
     },
     {
       "parameters": {
-        "postProcessAction": "nothing",
         "downloadAttachments": true,
         "options": {
           "forceReconnect": 60
@@ -26,7 +32,10 @@
       },
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2.2,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "id": "26f60ff9-7a90-450b-96a4-5d2e2a62d024",
       "name": "Email Trigger (IMAP)",
       "credentials": {
@@ -59,10 +68,28 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [224, 0],
+      "position": [
+        224,
+        0
+      ],
       "id": "allowlists-edit-fields",
       "name": "Allowlists",
-      "notes": "User-editable comma-separated lists. Do not put secrets here."
+      "notes": "senders: exact email or @domain. subjectKeywords: substring, optional."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function extractEmail(fromHeader) {\n  const raw = String(fromHeader || '');\n  const angle = raw.match(/<([^>]+)>/);\n  const candidate = (angle ? angle[1] : raw).trim().toLowerCase();\n  // Keep only a bare address if the header is messy\n  const email = candidate.match(/[^\\s<>]+@[^\\s<>]+/);\n  return email ? email[0] : candidate;\n}\n\nfunction senderMatches(fromHeader, entry) {\n  const needle = String(entry || '').trim().toLowerCase();\n  if (!needle) return false;\n  const fromEmail = extractEmail(fromHeader);\n  // Domain allowlist: \"@octopusenergy.it\"\n  if (needle.startsWith('@')) {\n    return fromEmail.endsWith(needle);\n  }\n  // Exact address match (avoids \"an@\" matching \"evan@\")\n  return fromEmail === needle;\n}\n\nconst senders = String($json.senders || '')\n  .split(',')\n  .map((s) => s.trim())\n  .filter(Boolean);\n$json.matchedSender = senders.some((s) => senderMatches($json.from, s));\n\nconst keywords = String($json.subjectKeywords || '')\n  .split(',')\n  .map((s) => s.trim().toLowerCase())\n  .filter(Boolean);\nconst subject = String($json.subject || '').toLowerCase();\n$json.matchedSubject =\n  keywords.length === 0 || keywords.some((k) => subject.includes(k));\n\nconst binary = $binary || {};\n$json.hasPdf = Object.values(binary).some((b) => {\n  const mime = String(b.mimeType || '').toLowerCase();\n  const ext = String(b.fileExtension || '').toLowerCase();\n  const name = String(b.fileName || '').toLowerCase();\n  return mime.includes('pdf') || ext === 'pdf' || name.endsWith('.pdf');\n});\n\nconst metadata = $json.metadata || {};\nconst headerId = String(\n  metadata['message-id'] || metadata['Message-ID'] || metadata.messageId || '',\n).trim();\nconst uid = $json.attributes?.uid;\n$json.messageId = headerId || (uid != null ? `uid:${uid}` : '');\n\nreturn $input.item;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "normalize-email",
+      "name": "Normalize",
+      "notes": "Exact sender / @domain; substring subject; hasPdf; messageId"
     },
     {
       "parameters": {
@@ -76,7 +103,7 @@
           "conditions": [
             {
               "id": "cond-sender",
-              "leftValue": "={{ String($json.senders || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean).some(s => String($json.from || '').toLowerCase().includes(s)) }}",
+              "leftValue": "={{ $json.matchedSender }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",
@@ -86,7 +113,17 @@
             },
             {
               "id": "cond-subject",
-              "leftValue": "={{ (() => { const keys = String($json.subjectKeywords || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean); const subject = String($json.subject || '').toLowerCase(); return keys.length === 0 || keys.some(k => subject.includes(k)); })() }}",
+              "leftValue": "={{ $json.matchedSubject }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-pdf",
+              "leftValue": "={{ $json.hasPdf }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",
@@ -101,9 +138,32 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [448, 0],
+      "position": [
+        672,
+        0
+      ],
       "id": "7bd3518b-d3dd-4c6c-8ba3-9bbcf217a759",
-      "name": "If"
+      "name": "If",
+      "notes": "matchedSender AND matchedSubject AND hasPdf"
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.messageId }}",
+        "options": {
+          "scope": "node",
+          "historySize": 10000
+        }
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -48
+      ],
+      "id": "dedup-message-id",
+      "name": "Dedup Message-ID",
+      "notes": "Skip emails already processed in previous executions"
     }
   ],
   "connections": {
@@ -122,11 +182,34 @@
       "main": [
         [
           {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
             "node": "If",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Dedup Message-ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },
@@ -135,7 +218,40 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
+  "staticData": null,
   "meta": {
     "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "7c98384c-0651-48b4-804f-a3d3fd9e42ac",
+  "activeVersionId": null,
+  "versionCounter": 30,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-08-19T23:22:19.804Z",
+      "createdAt": "2026-08-19T23:22:19.804Z",
+      "role": "workflow:owner",
+      "workflowId": "Q3nb17Ue1620295q",
+      "projectId": "qP11xorPyowFjPiQ",
+      "project": {
+        "updatedAt": "2026-08-19T00:24:56.141Z",
+        "createdAt": "2026-08-19T00:18:13.859Z",
+        "id": "qP11xorPyowFjPiQ",
+        "name": "Alessandro Decarli <adecarli29@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "8c7c555a-bdc3-4c8a-af22-d418451068d0"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
   }
 }
