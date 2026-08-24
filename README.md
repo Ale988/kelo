@@ -78,3 +78,18 @@ Change the image tag in `docker-compose.yml` (currently `2.35.3`), then:
 docker compose pull
 docker compose up -d
 ```
+
+## Bill parser (no AI)
+
+Extract MVP fields from Italian electricity/gas bill PDFs:
+
+```bash
+python -m pip install -e ".[dev]"
+# optional PDF fallback: python -m pip install -e ".[pdf]"
+python -m parsers path/to/bill.pdf
+python -m parsers path/to/bill.txt --sender ciao@octopusenergy.it
+python -m parsers path/to/bill.pdf --vendor octopus_luce
+python -m pytest
+```
+
+Requires `pdftotext` (poppler) for best layout extraction. Output is JSON on stdout. Gas vs electricity is set in `servizio`. n8n wiring comes later.

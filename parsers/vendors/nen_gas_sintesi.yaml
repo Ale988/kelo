@@ -1,0 +1,112 @@
+# NeN / YADA Energia — bolletta di sintesi gas
+# Fixture: tests/fixtures/nen_gas_sintesi.txt
+
+vendor_category: nen_gas_sintesi
+company: NeN - YADA Energia
+servizio: gas
+fornitore: NeN
+
+classification:
+  sender_domains:
+    - "@nen.it"
+    - "@yadaenergia.it"
+  text_keywords:
+    - NeN
+    - YADA Energia
+    - BOLLETTA DI SINTESI
+    - Offerta attiva
+  filename_slugs:
+    - nen
+    - bolletta_di_sintesi
+    - yada
+  require_keywords:
+    - Smc
+  exclude_keywords:
+    - kWh
+    - POD
+
+parsing:
+  totale:
+    labels:
+      - pattern: Totale\s+da\s+[Pp]agare
+      - pattern: Totale\s+Bolletta
+    amount_strategy: money_after
+
+  scadenza:
+    pattern: '[Ee]ntro\s+il\s+(\d{2}/\d{2}/\d{4})'
+    output_format: YYYY-MM-DD
+
+  periodo:
+    patterns:
+      - >-
+        Periodo\s+di\s+riferimento[\s\S]{0,60}?(\d{2}/\d{2}/\d{4})\s*[-–]\s*(\d{2}/\d{2}/\d{4})
+      - >-
+        PERIODO(?:\s+DI\s+RIFERIMENTO)?[\s:]*(?:dal\s+)?(\d{2}/\d{2}/\d{4})\s*(?:al|-)\s*(\d{2}/\d{2}/\d{4})
+
+  consumo:
+    patterns:
+      - pattern: 'Consumo\s+totale\s+fatturato[\s\S]{0,80}?([\d.,]+)\s*Smc'
+        unita: Smc
+
+  numero_fattura:
+    patterns:
+      - 'Fattura\s+n[°º]?\s*(\d+)'
+
+  codice_fornitura: null
+
+  punto_fornitura:
+    tipo: PDR
+    patterns:
+      - '\bPDR\b[^\n]*\n\s*(\d{8,})'
+    reject_if_matches:
+      - IBAN\s+IT\d{2}[A-Z]
+
+  subtotali:
+    lines:
+      - field: quota_consumi
+        label: Quota\s+per\s+consumi
+      - field: quota_fissa
+        label: Quota\s+fissa
+      - field: ricalcoli
+        label: (?:Totale\s+)?Ricalcoli
+      - field: accise_iva
+        label: Accise\s+e\s+IVA
+    altre_partite:
+      labels:
+        - Altre\s+partite
+      sum: true
+
+required_fields:
+  - totale
+  - scadenza
+  - servizio
+  - consumo.valore
+  - consumo.unita
+  - punto_fornitura.codice
+
+cross_checks:
+  - type: subtotali_sum
+    tolerance_eur: 0.02
+    compare_to: totale
+    maps_to: check.subtotali_ok
+
+extraction_hints: |
+  NeN sintesi layout notes (for regex authors, not LLM):
+  - "Totale da pagare" (mixed case) is the payment total — same semantics as Octopus TOTALE DA PAGARE.
+  - PDR code is usually on the line after a crowded "PDR" header row; do not match IBAN (IT85B...).
+  - "Totale Ricalcoli" may be negative; same-line amount uses first € importo (ignore "di cui ..." breakdowns).
+  - "Altre partite - Cuscinetto rata gas" rolls into altre_partite.
+  - Consumo line includes "di cui ... Smc stimati" — take the first Smc quantity before "di cui".
+  - Dettaglio PDF may lack clean header fields; prefer sintesi for MVP automation.
+
+fixtures:
+  - tests/fixtures/nen_gas_sintesi.txt
+
+expected_mvp:
+  totale: 45.58
+  scadenza: "2026-04-07"
+  periodo: { dal: "2026-03-01", al: "2026-03-31" }
+  consumo: { valore: 31.0, unita: Smc }
+  punto_fornitura: { tipo: PDR, codice: "07990001032047" }
+  numero_fattura: "261261166"
+  status: ok

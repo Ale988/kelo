@@ -1,0 +1,109 @@
+# Octopus Energy Italia — bolletta luce (text-extractable PDF)
+# Fixture: tests/fixtures/octopus_luce.txt
+
+vendor_category: octopus_luce
+company: Octopus Energy Italia
+servizio: elettrico
+fornitore: Octopus Energy
+
+classification:
+  sender_domains:
+    - "@octopusenergy.it"
+  text_keywords:
+    - Octopus Energy
+    - BOLLETTA LUCE
+    - Energia elettrica
+  filename_slugs:
+    - octopus
+    - fattura-A-
+  require_keywords:
+    - kWh
+  exclude_keywords:
+    - Smc
+    - PDR
+
+parsing:
+  totale:
+    labels:
+      - pattern: TOTALE\s+DA\s+PAGARE
+      - pattern: TOTALE\s+BOLLETTA
+    amount_strategy: money_after
+
+  scadenza:
+    pattern: '[Ee]ntro\s+il\s+(\d{2}/\d{2}/\d{4})'
+    output_format: YYYY-MM-DD
+
+  periodo:
+    patterns:
+      - >-
+        PERIODO\s+DI\s+RIFERIMENTO:\s*dal\s+(\d{2}/\d{2}/\d{4})\s+al\s+(\d{2}/\d{2}/\d{4})
+
+  consumo:
+    patterns:
+      - pattern: 'CONSUMO\s+FATTURATO:\s*([\d.,]+)\s*kWh'
+        unita: kWh
+
+  numero_fattura:
+    patterns:
+      - '\b(KE-[A-Z0-9-]+)\b'
+
+  codice_fornitura:
+    patterns:
+      - 'Codice\s+Fornitura:\s*([A-Z0-9-]+)'
+
+  punto_fornitura:
+    tipo: POD
+    pod_pattern: IT\d{3}[A-Z][A-Z0-9]{8}
+    patterns:
+      - 'CODICE\s+POD[\s:]*\n?\s*(IT\d{3}[A-Z][A-Z0-9]{8})'
+      - '\b(IT\d{3}[A-Z][A-Z0-9]{8})\b'
+
+  subtotali:
+    lines:
+      - field: quota_consumi
+        label: Quota\s+per\s+consumi
+      - field: quota_fissa
+        label: Quota\s+fissa
+      - field: quota_potenza
+        label: Quota\s+potenza
+      - field: accise_iva
+        label: Accise\s+e\s+IVA
+    altre_partite:
+      labels:
+        - Bonus\s+applicati
+        - Credito\s+rimanente
+      sum: true
+
+required_fields:
+  - totale
+  - scadenza
+  - servizio
+  - consumo.valore
+  - consumo.unita
+  - punto_fornitura.codice
+
+cross_checks:
+  - type: subtotali_sum
+    tolerance_eur: 0.02
+    compare_to: totale
+    maps_to: check.subtotali_ok
+
+extraction_hints: |
+  Octopus layout notes (for regex authors, not LLM):
+  - "TOTALE DA PAGARE" is the authoritative total; use it before "TOTALE BOLLETTA".
+  - Subtotal lines often span multiple columns: "45 kWh x 0,19 €/kWh ... 8,54 €".
+    Use last € importo on continuation lines, not quantity or unit price.
+  - When "Bonus applicati" appears, totale may be below TOTALE BOLLETTA; sum bonus into altre_partite.
+  - Invoice number format: KE-26-{codice_fornitura}-{seq}.
+
+fixtures:
+  - tests/fixtures/octopus_luce.txt
+
+expected_mvp:
+  totale: 24.63
+  scadenza: "2026-08-28"
+  periodo: { dal: "2026-07-01", al: "2026-07-31" }
+  consumo: { valore: 45.0, unita: kWh }
+  punto_fornitura: { tipo: POD, codice: IT221E00704700 }
+  numero_fattura: KE-26-F4AD1939-004
+  status: ok

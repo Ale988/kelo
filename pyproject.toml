@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kelo-parsers"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["PyYAML>=6.0"]
+
+[project.optional-dependencies]
+pdf = ["pypdf>=5.0.0"]
+dev = ["pytest>=8.0.0"]
+
+[tool.setuptools.packages.find]
+include = ["parsers*"]
+
+[tool.setuptools.package-data]
+parsers = ["vendors/*.yaml"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
